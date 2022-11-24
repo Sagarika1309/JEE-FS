@@ -1,0 +1,337 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  This stack creates multiple child stacks for the components of an 
+  PostageRA environment, assuming an existing VPC exists.
+  **WARNING** This template creates AWS resources. You will be billed 
+  for the AWS resources used if you create a stack from this template.
+
+Parameters:
+
+  ApplicationName:
+    Type: String
+    Description: What is the Application this is being deployed for?
+    Default: postagera
+  ApplicationKey:
+    Type: String
+    Description: What is the Application Key this is being deployed for?
+    Default: 7713417
+  AccountCode:
+    Type: String
+    Description: What is the account-level code (dev/qa/prod) for the environment?
+  Environment:
+    Type: String
+    Description: What is the SDLC environment this is being deployed into?
+    Default: dev
+  BuildId:
+    Type: String
+    Description: What is the GitHub build Id this is being deployed from?  Used to choose the right files from CloudFormation
+    Default: 127476
+  DataConfidentiality:
+    Type: String
+    Description: What is the Data Confidentiality of the deployed resources that store data?
+    Default: Confidential
+    AllowedValues:
+      - Public
+      - Private
+      - Restricted
+      - Confidential
+  AssetClassification:
+    Type: String
+    Description: What is the asset classification of the deployed resources?
+    Default: Critical
+    AllowedValues:
+      - Critical
+      - High
+      - Medium
+      - Low
+  ProjectCostCenter:
+    Type: String
+    Description: The ProjectCostCenter tag is used to designate the cost center associated with the project of the given AWS resource.
+    Default: 'MAADJ3'
+  CloudFormationBucketName:
+    Description: What is the name of the S3 bucket where the CloudFormation stacks are stored?
+    Type: String
+    Default: eba-cf-templates
+  StandardWindowsSG:
+    Description: Standard-Windows-Security Group ID
+    Type: String
+    Default: sg-06c0e305adf093402
+  VpcId:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: VpcId
+    Description: What VPC is the deployment in?
+  PrivateSubnet1:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: What is the first private subnet for deployments?
+    Default: PrivateSubnet1Id
+  PrivateSubnet2:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: What is the second private subnet for deployments?
+    Default: PrivateSubnet2Id
+  PrivateSubnet3:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: What is the third private subnet for deployments?
+    Default: PrivateSubnet3Id
+  PrivateSubnet4:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: What is the fourth private subnet for deployments?
+    Default: PrivateSubnet4Id
+  PublicSubnet1:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: What is the first public subnet for deployments?
+    Default: PublicSubnet1Id
+  PublicSubnet2:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: What is the second public subnet for deployments?
+    Default: PublicSubnet2Id
+  PrivateCidrIps:
+    Description: Comma-delimited list of CIDR IPs in the format "CIDRIP1,CIDRIP2". Limit to 4. Example, Private Subnet CIDR ips
+    Type: AWS::SSM::Parameter::Value<CommaDelimitedList>
+    Default: SGCidr
+  KmsId:
+    Description: Arn of the KMS Customer Managed Key used for data encryption at rest
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: KmsId
+  KmsIdDr:
+    Description: Arn of the KMS Customer Managed Key used for data encryption at rest in DR
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: KmsIdDr
+
+
+Conditions:
+  ProdEnv: !Equals
+    - !Ref Environment
+    - 'prod'
+  NotDev: !Or [!Equals [!Ref Environment, 'syst'], !Equals [!Ref Environment, 'prod']]
+  PrimaryRegion: !Equals
+    - !Sub ${AWS::Region}
+    - 'us-east-1'
+  SecondaryRegion: !Equals
+    - !Sub ${AWS::Region}
+    - 'us-west-2'
+
+Resources:
+
+  PostageRASecurityGroup:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        EnvironmentStage: !Ref Environment
+        VpcId: !Ref VpcId
+        StandardWindowsSG: !Ref StandardWindowsSG
+      Tags:
+        - Key: afl-business-application-key
+          Value: !Ref ApplicationName
+        - Key: afl-business-application-id
+          Value: !Ref ApplicationKey
+        - Key: afl-aws-org-account-environment
+          Value: !Ref Environment
+        - Key: afl-security-data-confidentiality
+          Value: !Ref DataConfidentiality
+        - Key: afl-security-asset-classification
+          Value: !Ref AssetClassification
+        - Key: monitoring-application
+          Value: Essential-Production-Info-Center
+        - Key: monitoring-environment
+          Value: !Ref Environment
+      TemplateURL: !Sub https://s3.amazonaws.com/${CloudFormationBucketName}/${BuildId}/cloudformation/modules/security-groups/template.yaml
+
+  RDS:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: PostageRASecurityGroup
+    Properties:
+      Parameters:
+        ApplicationName: !Ref ApplicationName
+        EnvironmentStage: !Ref Environment
+        AuroraKMSCMKId: !If [PrimaryRegion, !Ref 'KmsId', !Ref 'KmsIdDr']
+        VpcId: !Ref VpcId
+        PrivateSubnetID1: !Ref PrivateSubnet1
+        PrivateSubnetID2: !Ref PrivateSubnet2
+        PrivateSubnetID3: !Ref PrivateSubnet3
+        PrivateSubnetID4: !Ref PrivateSubnet4
+        SGCidr:
+          !Join
+          - ','
+          - !Ref PrivateCidrIps
+      Tags:
+        - Key: afl-business-application-key
+          Value: !Ref ApplicationName
+        - Key: afl-business-application-id
+          Value: !Ref ApplicationKey
+        - Key: afl-aws-org-account-environment
+          Value: !Ref Environment
+        - Key: afl-security-data-confidentiality
+          Value: !Ref DataConfidentiality
+        - Key: afl-security-asset-classification
+          Value: !Ref AssetClassification
+        - Key: afl-itsm-schedule-backups
+          Value: !If [ NotDev, 'D50_1AM', 'D20_1AM' ]
+        - Key: monitoring-application
+          Value: Essential-Production-Info-Center
+        - Key: monitoring-environment
+          Value: !Ref Environment
+      TemplateURL: !Sub https://s3.amazonaws.com/${CloudFormationBucketName}/${BuildId}/cloudformation/modules/rds/template.yaml
+
+  EC2:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: PostageRASecurityGroup
+    Properties:
+      Parameters:
+        ApplicationName: !Ref ApplicationName
+        EnvironmentStage: !Ref Environment
+        VpcId: !Ref VpcId
+        PrivateSubnetID1: !Ref PrivateSubnet1
+        PrivateSubnetID2: !Ref PrivateSubnet2
+        PrivateSubnetID3: !Ref PrivateSubnet4
+        PrivateSubnetID4: !Ref PrivateSubnet4
+        PublicSubnetID1: !Ref PublicSubnet1
+        PublicSubnetID2: !Ref PublicSubnet2
+        CloudFormationBucketName: !Ref CloudFormationBucketName
+        BuildId: !Ref BuildId
+      Tags:
+        - Key: afl-business-application-key
+          Value: !Ref ApplicationName
+        - Key: afl-business-application-id
+          Value: !Ref ApplicationKey
+        - Key: afl-aws-org-account-environment
+          Value: !Ref Environment
+        - Key: afl-security-data-confidentiality
+          Value: !Ref DataConfidentiality
+        - Key: afl-security-asset-classification
+          Value: !Ref AssetClassification
+        - Key: afl-monitoring-state
+          Value: active
+        - Key: monitoring-application
+          Value: Essential-Production-Info-Center
+        - Key: monitoring-environment
+          Value: !Ref Environment
+      TemplateURL: !Sub https://s3.amazonaws.com/${CloudFormationBucketName}/${BuildId}/cloudformation/modules/ec2/template.yaml
+
+  CodeDeploy:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ApplicationName: !Ref ApplicationName
+        EnvironmentStage: !Ref Environment
+        IISServerAutoScalingGroup: !GetAtt EC2.Outputs.IISServerAutoScalingGroup
+        WCFServerAutoScalingGroup: !GetAtt EC2.Outputs.WCFServerAutoScalingGroup
+      Tags:
+        - Key: afl-business-application-key
+          Value: !Ref ApplicationName
+        - Key: afl-business-application-id
+          Value: !Ref ApplicationKey
+        - Key: afl-aws-org-account-environment
+          Value: !Ref Environment
+        - Key: afl-security-data-confidentiality
+          Value: !Ref DataConfidentiality
+        - Key: afl-security-asset-classification
+          Value: !Ref AssetClassification
+        - Key: monitoring-application
+          Value: Essential-Production-Info-Center
+        - Key: monitoring-environment
+          Value: !Ref Environment
+      TemplateURL: !Sub https://s3.amazonaws.com/${CloudFormationBucketName}/${BuildId}/cloudformation/modules/codedeploy/template.yaml
+
+
+Outputs:
+  AuroraDBClusterEndpointPort:
+    Description: "Aurora Cluster Endpoint Port number"
+    Export:
+      Name: !Sub ${Environment}-AuroraDBClusterEndpointPort
+    Value: !GetAtt RDS.Outputs.AuroraDBClusterEndpointPort
+  AuroraDBClusterEndpoint:
+    Description: "Aurora Cluster endpoint"
+    Export:
+      Name: !Sub ${Environment}-AuroraDBClusterEndpoint
+    Value: !GetAtt RDS.Outputs.AuroraDBClusterEndpoint
+  AuroraDBClusterReadEndpoint:
+    Description: "Aurora Cluster Read Endpoint"
+    Export:
+      Name: !Sub ${Environment}-AuroraDBClusterReadEndpoint
+    Value: !GetAtt RDS.Outputs.AuroraDBClusterReadEndpoint
+  AuroraDBName:
+    Description: "Aurora Database Name"
+    Export:
+      Name: !Sub ${Environment}-AuroraDBName
+    Value: !GetAtt RDS.Outputs.AuroraDBName
+
+  IISServerLaunchTemplateId:
+    Description: IIS Server Launch Template ID
+    Export:
+      Name: !Sub ${Environment}-IISServerLaunchTemplateId
+    Value: !GetAtt EC2.Outputs.IISServerLaunchTemplateId
+  IISServerAutoScalingGroup:
+    Description: IIS Server AutoScaling Group
+    Value: !GetAtt EC2.Outputs.IISServerAutoScalingGroup
+    Export:
+      Name: !Sub ${Environment}-IISServerAutoScalingGroup
+  WCFServerLaunchTemplateId:
+    Description: WCF Server Launch Template ID
+    Export:
+      Name: !Sub ${Environment}-WCFServerLaunchTemplateId
+    Value: !GetAtt EC2.Outputs.WCFServerLaunchTemplateId
+  WCFServerAutoScalingGroup:
+    Description: WCF Server AutoScaling Group
+    Value: !GetAtt EC2.Outputs.WCFServerAutoScalingGroup
+    Export:
+      Name: !Sub ${Environment}-WCFServerAutoScalingGroup
+  ApplicationLoadBalancerTargetGroupARN:
+    Description: PostageRA Application LoadBalancer Target group ARN
+    Export:
+      Name: !Sub ${Environment}-ApplicationLoadBalancerTargetGroupARN
+    Value: !GetAtt EC2.Outputs.ApplicationLoadBalancerTargetGroupARN
+  ApplicationLoadBalancerTargetGroupName:
+    Description: ApplicationLoadBalancer Target group Name
+    Value: !GetAtt EC2.Outputs.ApplicationLoadBalancerTargetGroupName
+    Export:
+      Name: !Sub ${Environment}-ApplicationLoadBalancerTargetGroupName
+  ApplicationLoadBalancerARN:
+    Description: PostageRA Application LoadBalancer ARN
+    Export:
+      Name: !Sub ${Environment}-ApplicationLoadBalancerARN
+    Value: !GetAtt EC2.Outputs.ApplicationLoadBalancerARN
+  ApplicationLoadBalancerDNSName:
+    Description: ApplicationLoadBalancer DNS Name
+    Value: !GetAtt EC2.Outputs.ApplicationLoadBalancerDNSName
+    Export:
+      Name: !Sub ${Environment}-ApplicationLoadBalancerDNSName
+  ApplicationLoadBalancerName:
+    Description: ApplicationLoadBalancer Name
+    Value: !GetAtt EC2.Outputs.ApplicationLoadBalancerName
+    Export:
+      Name: !Sub ${Environment}-ApplicationLoadBalancerName
+  ApplicationLoadBalancerListenerARN:
+    Description: ApplicationLoadBalancer Listener ARN
+    Value: !GetAtt EC2.Outputs.ApplicationLoadBalancerListenerARN
+    Export:
+      Name: !Sub ${Environment}-ApplicationLoadBalancerListenerARN
+  NetworkLoadBalancerARN:
+    Description: PostageRA Network LoadBalancer ARN
+    Export:
+      Name: !Sub ${Environment}-NetworkLoadBalancerARN
+    Value: !GetAtt EC2.Outputs.NetworkLoadBalancerARN
+  NetworkLoadBalancerDNSName:
+    Description: Network LoadBalancer DNS Name
+    Value: !GetAtt EC2.Outputs.NetworkLoadBalancerDNSName
+    Export:
+      Name: !Sub ${Environment}-NetworkLoadBalancerDNSName
+  NetworkLoadBalancerName:
+    Description: Network LoadBalancer Name
+    Value: !GetAtt EC2.Outputs.NetworkLoadBalancerName
+    Export:
+      Name: !Sub ${Environment}-NetworkLoadBalancerName
+  NetworkLoadBalancerListenerARN:
+    Description: Network LoadBalancer Listener ARN
+    Value: !GetAtt EC2.Outputs.NetworkLoadBalancerListenerARN
+    Export:
+      Name: !Sub ${Environment}-NetworkLoadBalancerListenerARN
+  NetworkLoadBalancerTargetGroupARN:
+    Description: PostageRA Network LoadBalancer Target group ARN
+    Export:
+      Name: !Sub ${Environment}-NetworkLoadBalancerTargetGroupARN
+    Value: !GetAtt EC2.Outputs.NetworkLoadBalancerTargetGroupARN
+  NetworkLoadBalancerTargetGroupName:
+    Description: Network LoadBalancer Target group Name
+    Value: !GetAtt EC2.Outputs.NetworkLoadBalancerTargetGroupName
+    Export:
+      Name: !Sub ${Environment}-NetworkLoadBalancerTargetGroupName

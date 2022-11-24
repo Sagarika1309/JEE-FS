@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  This stack creates ssm parameters in one region of an AWS account. It
+  is intended to provide a single source of truth for all deployments in
+  that account/region and reduce the passing of parameters to stacks.
+  **WARNING** This template creates AWS resources. You will be billed 
+  for the AWS resources used if you create a stack from this template.
+Parameters:
+  Environment:
+    Type: String
+    Description: What is the SDLC environment this is being deployed into?
+    Default: Development
+  KmsId:
+    Type: String
+    Description: What Kms key will be used to encrypt data in the region?
+  KmsIdDr:
+    Type: String
+    Description: What Kms key will be used to encrypt data in the DR region?
+  KmsAlias:
+    Type: String
+    Description: What Kms alias name will be used to encrypt data in the region?
+  SGCidr:
+    Type: String
+    Description: Comma delimited list of CIDR blocks should the Security Groups use to allow access from this VPC?
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: What is the Private first subnet in the region?
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: What is the Private second subnet in the region?
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet::Id
+    Description: What is the Private third subnet in the region?
+  PrivateSubnet4:
+    Type: AWS::EC2::Subnet::Id
+    Description: What is the Private fourth subnet in the region?
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: What is the public subnet 1 in the region?
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: What is the public subnet 2 in the region?
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: What is the VPC in the region?
+
+Resources:
+  KmsIdParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/KmsId"
+      Type: String
+      Value: !Ref KmsId
+      Description: !Sub "KmsId for ${AWS::AccountId} in ${AWS::Region}"
+  KmsIdDrParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/KmsIdDr"
+      Type: String
+      Value: !Ref KmsIdDr
+      Description: !Sub "KmsIdDr for ${AWS::AccountId} in ${AWS::Region}"
+  KmsAliasName:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/KmsAlias"
+      Type: String
+      Value: !Ref KmsAlias
+      Description: !Sub "Kms alias name for ${AWS::AccountId} in ${AWS::Region}"
+  SGCidrParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/SGCidr"
+      Type: StringList
+      Value: !Ref SGCidr
+      Description: !Sub "List of local VPC CIDRs for ${AWS::AccountId} in ${AWS::Region}"
+  Subnet1Param:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/PrivateSubnet1Id"
+      Type: String
+      Value: !Ref PrivateSubnet1
+      Description: !Sub "Private Subnet ID 1 for ${AWS::AccountId} in ${AWS::Region}"
+  Subnet2Param:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/PrivateSubnet2Id"
+      Type: String
+      Value: !Ref PrivateSubnet2
+      Description: !Sub "Private Subnet ID 2 for ${AWS::AccountId} in ${AWS::Region}"
+  Subnet3Param:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/PrivateSubnet3Id"
+      Type: String
+      Value: !Ref PrivateSubnet3
+      Description: !Sub "Private Subnet ID 3 for ${AWS::AccountId} in ${AWS::Region}"
+  Subnet4Param:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/PrivateSubnet4Id"
+      Type: String
+      Value: !Ref PrivateSubnet4
+      Description: !Sub "Private Subnet ID 4 for ${AWS::AccountId} in ${AWS::Region}"
+  Subnet5Param:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/PublicSubnet1Id"
+      Type: String
+      Value: !Ref PublicSubnet1
+      Description: !Sub "Public Subnet ID 1 for ${AWS::AccountId} in ${AWS::Region}"
+  Subnet6Param:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/PublicSubnet2Id"
+      Type: String
+      Value: !Ref PublicSubnet2
+      Description: !Sub "Public Subnet ID 2 for ${AWS::AccountId} in ${AWS::Region}"
+  SubnetListParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/SubnetIdList"
+      Type: String
+      Value: !Join
+        - ","
+        - - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+          - !Ref PrivateSubnet3
+          - !Ref PrivateSubnet4
+          - !Ref PublicSubnet1
+          - !Ref PublicSubnet2
+      Description: !Sub "Subnet ID List for ${AWS::AccountId} in ${AWS::Region}"
+  VpcIdParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/VpcId"
+      Type: String
+      Value: !Ref VpcId
+      Description: !Sub "VPC ID for ${AWS::AccountId} in ${AWS::Region}"
+
+  

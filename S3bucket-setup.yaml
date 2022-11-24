@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template to create S3 bucket and policy for Cloudformation templates
+
+Parameters:
+
+  Environment:
+    Type: String
+    Description: Environment Name
+    Default: dev
+
+  Application:
+    Type: String
+    Description: application Name
+    Default: postagera
+
+Resources:
+
+  CoreInfraS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Description: Bucket in which all cloudformation templates will be stored
+    Properties:
+      BucketName: !Sub cf-templates-${AWS::AccountId}-${Application}-${Environment}-${AWS::Region}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'cleanup'
+            NoncurrentVersionExpiration:
+              NewerNoncurrentVersions: 1
+              NoncurrentDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 5
+            Status: Enabled
+      Tags:
+        - Key: 'CF Bucket'
+          Value: !Sub 'CF Bucket for ${Application}'
+
+  CoreInfraS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CoreInfraS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: !Sub 'Readfor${Application}Accounts'
+            Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Resource:
+              - !Sub 'arn:aws:s3:::cf-templates-${AWS::AccountId}-${Application}-${Environment}-${AWS::Region}/*'
+
+            Principal:
+              AWS:
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+
+  WebAppS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Description: Bucket in which all cloudformation templates will be stored
+    Properties:
+      BucketName: !Sub webapp-${AWS::AccountId}-${Application}-${Environment}-${AWS::Region}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'cleanup'
+            NoncurrentVersionExpiration:
+              NewerNoncurrentVersions: 1
+              NoncurrentDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 5
+            Status: Enabled
+      Tags:
+        - Key: 'Webapp Application Bucket'
+          Value: !Sub 'Webapp Application Bucket for ${Application}'
+
+
+  SSISS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Description: Bucket in which all cloudformation templates will be stored
+    Properties:
+      BucketName: !Sub ssis-${AWS::AccountId}-${Application}-${Environment}-${AWS::Region}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'cleanup'
+            NoncurrentVersionExpiration:
+              NewerNoncurrentVersions: 1
+              NoncurrentDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 5
+            Status: Enabled
+      Tags:
+        - Key: 'SSIS application bucket'
+          Value: !Sub 'SSIS application Bucket for ${Application}'
